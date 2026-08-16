@@ -1,6 +1,6 @@
 # Duress-Guard: design, threat model, and honest limitations
 
-**Farooq Syed** · M.S. in Computer and Information Security Systems, Eastern Illinois University · 2026
+**Farooq Syed** · M.S. in Computer and Information Security Systems, Eastern Illinois University · 2023
 
 *Prototype for personal-device protection: a duress-aware unlock layer plus BitLocker
 drive encryption with user-chosen key backup. Defensive, anti-theft research.
