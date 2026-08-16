@@ -56,6 +56,17 @@ This project takes the honest, layered approach to the same goal:
   A clean shutdown is not counted. Tested end-to-end by `simulate_startup_guard.py`
   (11/11). Safe-Mode limits are documented honestly in `docs/STARTUP_WATCHDOG.md`.
 
+## v4 additions
+
+- **Off-device watcher** (`watcher_server.py` + `remote_watcher.py`). The fix for the
+  one thing a local watchdog cannot win: an admin attacker can kill it. The decision
+  moves off the device. The device checks in with a small server; if it stops, the
+  server flags it MISSED, and the owner can remotely issue an "arm" command that the
+  device picks up on its next poll and executes (encrypt folders / arm panics) even
+  while it is in an attacker's hands. Tested by `simulate_remote_watcher.py` (7/7).
+  Security note: this is a prototype with **no auth/TLS** - a real deployment needs
+  HTTPS + per-device tokens (see `docs/REMOTE_WATCHER.md`).
+
 ## What this is NOT (read this first)
 
 - It does **not** replace the Windows login screen. See `docs/CREDENTIAL_PROVIDER.md`
@@ -78,6 +89,9 @@ This project takes the honest, layered approach to the same goal:
 |-- simulate_duress.py       # v2: controlled simulation of the whole flow
 |-- startup_guard.py         # v3: startup watchdog (dead-man's switch + tamper counter)
 |-- simulate_startup_guard.py# v3: controlled simulation of the watchdog
+|-- watcher_server.py        # v4: off-device watcher (server)
+|-- remote_watcher.py        # v4: off-device watcher (client)
+|-- simulate_remote_watcher.py# v4: controlled simulation of the remote watcher
 |-- register_logon_task.ps1  # v2: register the logon-monitor scheduled task
 |-- requirements.txt
 |-- README.md
@@ -85,14 +99,16 @@ This project takes the honest, layered approach to the same goal:
 |-- docs/
 |   |-- CREDENTIAL_PROVIDER.md
 |   |-- LOGON_MONITOR.md
-|   `-- STARTUP_WATCHDOG.md
+|   |-- STARTUP_WATCHDOG.md
+|   `-- REMOTE_WATCHER.md
 |-- tests/
 |   |-- test_duress.py
 |   |-- test_bitlocker.py
 |   |-- test_encryption.py
 |   |-- test_panic_boot.py
 |   |-- test_login_monitor.py
-|   `-- test_startup_guard.py
+|   |-- test_startup_guard.py
+|   `-- test_remote_watcher.py
 ```
 
 ## Quick start

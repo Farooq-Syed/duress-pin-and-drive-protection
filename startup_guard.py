@@ -157,6 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="Run one watchdog cycle")
     run.add_argument("--action-on-overdue", choices=["warn", "act"], default="warn")
     run.add_argument("--now", type=float, default=None, help="Override clock (testing)")
+    run.add_argument("--server", default="", help="Watcher server URL for the off-device check-in + command poll (v4)")
+    run.add_argument("--device-id", default="device-unknown")
     return parser
 
 
@@ -193,11 +195,25 @@ def main() -> None:
     elif args.command == "run":
         result = guard.check(now, args.action_on_overdue)
         print(json.dumps(result))
-        if result["status"] in ("final", "act"):
+        local_final = result["status"] in ("final", "act")
+        if local_final:
             from duress_guard import _run_configured_duress
 
             _run_configured_duress(args.storage_dir, args.marker_phrase)
             print("duress-actions-run")
+        if args.server:
+            # Off-device layer (v4): check in, and act if the owner armed the device
+            # remotely - the case where the local watchdog was defeated or the
+            # device is in someone else's hands.
+            from remote_watcher import run_watchdog_cycle
+
+            outcome = run_watchdog_cycle(args.server, args.device_id)
+            print(json.dumps({"remote": outcome}))
+            if outcome["armed"] and not local_final:
+                from duress_guard import _run_configured_duress
+
+                _run_configured_duress(args.storage_dir, args.marker_phrase)
+                print("duress-actions-run (remote arm)")
 
 
 if __name__ == "__main__":

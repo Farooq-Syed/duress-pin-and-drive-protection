@@ -88,3 +88,21 @@ whole thing possible, because the "final decision" can be a *reversible* encrypt
 instead of a destructive wipe.
 
 State: 44 tests green; v3 simulation 11/11; v2 simulation 18/18.
+
+## v4: off-device watcher
+
+The honest answer to "what happens when an admin attacker just kills the watchdog" is
+that a local process cannot win that fight. So I moved the decision off-device.
+
+The watcher is deliberately minimal: a stdlib HTTP server that tracks per-device
+check-ins, a missed flag past a timeout, and a command queue. The device polls for
+commands; the owner can arm it remotely, and an armed device runs the duress actions
+(encrypt / panic) on its next poll even while it is in someone else's hands. The
+simulation proves the full loop: check-in, go-dark -> missed, remote arm -> encrypt,
+owner recovers, command consumed.
+
+The security notes are honest to the point of being a checklist: no auth, no TLS,
+server is the trust root, in-memory state. A prototype that says what a production
+version needs is more useful than one that pretends to be done.
+
+State: 49 tests green; simulations 18/18 (v2), 11/11 (v3), 7/7 (v4).
