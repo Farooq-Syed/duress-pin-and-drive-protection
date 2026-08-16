@@ -1,6 +1,10 @@
 # Duress-Guard: a layered duress-PIN and drive-protection project
 
-**Farooq Syed** · M.S. in Computer and Information Security Systems, Eastern Illinois University · 2026
+[![CI](https://github.com/Farooq-Syed/duress-pin-and-drive-protection/actions/workflows/ci.yml/badge.svg)](https://github.com/Farooq-Syed/duress-pin-and-drive-protection/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-non--commercial-purple)
+
+**Farooq Syed** · M.S. in Computer and Information Security Systems, Eastern Illinois University · 2023
 
 *Prototype for a personal-device protection tool: a duress-aware unlock layer plus
 BitLocker drive encryption with recovery-key backup to a user-chosen location.
