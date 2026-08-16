@@ -1,0 +1,2 @@
+# Duress-Guard uses only the Python standard library
+# (hashlib, hmac, smtplib, subprocess). No installs required.
