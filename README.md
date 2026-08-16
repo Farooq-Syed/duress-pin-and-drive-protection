@@ -119,7 +119,7 @@ This project takes the honest, layered approach to the same goal:
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m pytest            # run the test suite (no admin needed)
+python -m unittest discover -s tests -v   # run the test suite (no admin needed)
 python simulate_duress.py   # controlled simulation of the v2 flow
 
 # Duress layer: configure a real PIN + duress PIN
@@ -134,3 +134,30 @@ python bitlocker_tool.py --backup-key --method email --to mybackup@gmail.com
 ```
 
 Every destructive action is off by default and must be explicitly configured.
+
+## Progress & next steps
+
+### What is completed
+
+- [x] **v1 — core duress PIN** — real/duress PIN verification, lockout, configurable duress
+  actions, stealth storage in a user-chosen directory.
+- [x] **v2 — encrypt-on-duress + drive protection** — Fernet encrypt-in-place, pre-boot panic
+  markers, BitLocker enable + recovery-key backup, controlled sandbox simulation (18 checks),
+  and the logon-monitor path through the official login screen.
+- [x] **v3 — startup watchdog** — dead-man's switch with tamper counter; clean shutdown not
+  counted; end-to-end simulation (11/11).
+- [x] **v4 — off-device watcher** — decision moved off-device so an attacker who kills the local
+  process loses; server flags missed check-ins and can remotely arm actions (7/7).
+- [x] **Testing & docs** — unittest suite across all layers, threat-model and honest-limitations
+  docs (`PAPER.md`, `docs/`), GitHub Actions CI, non-commercial license.
+
+### Next steps
+
+- [ ] **Authenticate the remote-watcher channel** — HTTPS + per-device tokens (currently a
+  prototype with no auth/TLS; see `docs/REMOTE_WATCHER.md`).
+- [ ] **Real Windows credential provider** — a C++ Credential Provider to replace the login
+  screen (prototyped logic only; see `docs/CREDENTIAL_PROVIDER.md`).
+- [ ] **TPM + Secure Boot integration** — bind decryption to measured boot for stronger
+  anti-evil-maid posture.
+- [ ] **Mobile/email duress notification** — a verified, encrypted channel for the silent alert.
+- [ ] **Independent third-party review** of the crypto and threat model.
