@@ -1,0 +1,30 @@
+{
+  "generated": "2026-08-16",
+  "suite": {
+    "unit_tests": 49,
+    "status": "all passing"
+  },
+  "simulations": {
+    "v2_duress_flow": {
+      "script": "simulate_duress.py",
+      "checks": "18/18 PASSED",
+      "what_it_proves": "normal PIN unlocks; duress PIN looks like success but encrypts; owner recovers byte-identical; wrong passphrase rejected; decrypt refuses unencrypted data; partition panic marker armed/cancelled"
+    },
+    "v3_startup_watchdog": {
+      "script": "simulate_startup_guard.py",
+      "checks": "11/11 PASSED",
+      "what_it_proves": "baseline, confirm, timely check-in; lapsed confirmation warns and touches nothing; first missed heartbeat recorded; second missed heartbeat = final decision (encrypt); owner recovers; clean shutdown not counted"
+    },
+    "v4_off_device_watcher": {
+      "script": "simulate_remote_watcher.py",
+      "checks": "7/7 PASSED",
+      "what_it_proves": "device checks in; goes dark -> server flags MISSED; owner arms remotely; device poll runs duress actions (encrypt); owner recovers; command consumed"
+    }
+  },
+  "versions": {
+    "v1": "duress PIN core + BitLocker drive protection + recovery-key backup",
+    "v2": "encrypt-on-duress (Fernet), configurable targets, pre-boot panics, logon monitor",
+    "v3": "startup watchdog: dead-man's switch + tamper counter",
+    "v4": "off-device watcher: remote check-in, missed detection, remote arm"
+  }
+}
