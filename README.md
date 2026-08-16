@@ -46,6 +46,16 @@ This project takes the honest, layered approach to the same goal:
   duress password, and a scheduled task runs the duress actions when that account logs
   in. No custom login screen needed. See `docs/LOGON_MONITOR.md`.
 
+## v3 additions
+
+- **Startup watchdog** (`startup_guard.py`). A dead-man's switch with a tamper counter:
+  the owner confirms with the real PIN inside a window; if confirmation lapses it
+  warns (never destroys on its own), and if the watchdog stops checking in when it
+  should (killed / task disabled / abrupt power-off) the first missed heartbeat is
+  recorded, the second triggers the final decision (encrypt folders / arm panics).
+  A clean shutdown is not counted. Tested end-to-end by `simulate_startup_guard.py`
+  (11/11). Safe-Mode limits are documented honestly in `docs/STARTUP_WATCHDOG.md`.
+
 ## What this is NOT (read this first)
 
 - It does **not** replace the Windows login screen. See `docs/CREDENTIAL_PROVIDER.md`
@@ -66,19 +76,23 @@ This project takes the honest, layered approach to the same goal:
 |-- panic_boot.py            # v2: pre-boot panic markers for partition/system targets
 |-- bitlocker_tool.py        # BitLocker status/enable + recovery-key backup
 |-- simulate_duress.py       # v2: controlled simulation of the whole flow
+|-- startup_guard.py         # v3: startup watchdog (dead-man's switch + tamper counter)
+|-- simulate_startup_guard.py# v3: controlled simulation of the watchdog
 |-- register_logon_task.ps1  # v2: register the logon-monitor scheduled task
 |-- requirements.txt
 |-- README.md
 |-- PAPER.md                 # design, threat model, honest limitations
 |-- docs/
 |   |-- CREDENTIAL_PROVIDER.md
-|   `-- LOGON_MONITOR.md
+|   |-- LOGON_MONITOR.md
+|   `-- STARTUP_WATCHDOG.md
 |-- tests/
 |   |-- test_duress.py
 |   |-- test_bitlocker.py
 |   |-- test_encryption.py
 |   |-- test_panic_boot.py
-|   `-- test_login_monitor.py
+|   |-- test_login_monitor.py
+|   `-- test_startup_guard.py
 ```
 
 ## Quick start

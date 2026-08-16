@@ -60,3 +60,31 @@ scenario is NOT a duress-PIN problem (the PIN never runs), it is a BitLocker pro
 and the design now says so explicitly.
 
 State: 37 tests green, simulation 18/18.
+
+## v3: startup watchdog (dead-man's switch + tamper counter)
+
+The user's idea: a startup program that asks for a password after unlock, acts if it
+is not given, records the first attempt to kill it, and makes the next attempt final.
+
+I built it, but not exactly as described, and the differences are the interesting
+part:
+
+- **Overdue confirmation never destroys on its own.** The owner who forgets the PIN
+  is the most likely false-positive victim, so "no confirmation" WARNS first and only
+  acts when explicitly configured. A dead-man's switch that punishes its owner is not
+  a feature.
+- **The tamper counter is a heartbeat, not a "kill detection".** A user-mode program
+  cannot actually tell when an admin killed it. What it CAN detect is "the watchdog
+  stopped checking in when it should" - which is the honest signal, and it has the
+  same user-visible behavior: first missed beat recorded, second is final.
+- **Clean shutdown is not a kill.** An AtShutdown hook distinguishes a normal
+  power-off from a power-cycle by someone who did not want the watchdog running.
+- **Safe Mode is documented, not faked.** Startup tasks don't run in Safe Mode by
+  design. I wrote down the reality (encryption is what actually gates Safe Mode on an
+  encrypted drive) rather than claiming it would "work in safe mode if possible".
+
+The one genuinely strong idea in the request was the right one: encryption makes the
+whole thing possible, because the "final decision" can be a *reversible* encryption
+instead of a destructive wipe.
+
+State: 44 tests green; v3 simulation 11/11; v2 simulation 18/18.
