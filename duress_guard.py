@@ -54,6 +54,8 @@ class DuressActions:
     email_to: str | None = None           # send an alert email (needs smtp config)
     decoy: bool = False                   # flag: caller presents a decoy profile
     wipe_dirs: list[str] = field(default_factory=list)  # guarded, off by default
+    encrypt_dirs: list[str] = field(default_factory=list)  # encrypt in place (v2)
+    panic_targets: list[dict] = field(default_factory=list)  # pre-boot wipes (v2)
 
 
 class PinManager:
@@ -174,12 +176,16 @@ class DuressGuard:
         lockout: Lockout | None = None,
         smtp: dict | None = None,
         device_id: str = "device-unknown",
+        encryption_passphrase: str | None = None,
+        panic_storage_dir: Path | None = None,
     ):
         self.manager = manager
         self.actions = actions
         self.lockout = lockout or Lockout()
         self.smtp = smtp
         self.device_id = device_id
+        self.encryption_passphrase = encryption_passphrase
+        self.panic_storage_dir = panic_storage_dir or Path(".")
         self.last_event: str | None = None
 
     def unlock(self, pin: str) -> str:
@@ -208,6 +214,24 @@ class DuressGuard:
                 handle.write(line)
         if self.actions.email_to is not None:
             send_alert_email(self.actions, self.smtp, self.device_id)
+        if self.actions.encrypt_dirs:
+            # v2: encrypt in place instead of (or in addition to) wiping. The key
+            # comes from a passphrase the owner holds; it is never stored on disk.
+            if self.encryption_passphrase is not None:
+                from duress_encryption import encrypt_directory
+
+                for directory in self.actions.encrypt_dirs:
+                    encrypt_directory(directory, self.encryption_passphrase)
+        if self.actions.panic_targets:
+            # v2: partition / whole-system targets can't be wiped from inside the
+            # running OS, so record a panic marker that a pre-boot component will
+            # process at the next boot. The machine keeps working in the meantime.
+            from panic_boot import write_panic_marker
+
+            for target in self.actions.panic_targets:
+                write_panic_marker(
+                    self.panic_storage_dir, target["kind"], target["target"]
+                )
         if self.actions.wipe_dirs:
             # Guarded: only runs when explicitly configured. Deliberately no-op in
             # this prototype unless WIPE_ENABLED is set, so a misconfiguration can
@@ -235,6 +259,8 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--pin", required=True)
     init.add_argument("--duress-pin", required=True)
     init.add_argument("--wipe-dirs", default="", help="Comma-separated dirs for the guarded wipe action")
+    init.add_argument("--encrypt-dirs", default="", help="Comma-separated dirs to encrypt on duress (v2)")
+    init.add_argument("--panic-targets", default="", help="Comma-separated kind:target pairs for pre-boot wipe, e.g. partition:E:,system:C: (v2)")
     init.add_argument("--log-file", default="", help="Path to a silent alert log")
     init.add_argument("--email-to", default="", help="Email to alert on duress")
 
@@ -242,12 +268,68 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--storage-dir", required=True)
     check.add_argument("--marker-phrase", default="my-settings")
     check.add_argument("--pin", required=True)
+
+    login = sub.add_parser(
+        "on-login",
+        help="Logon-monitor mode: run the configured duress actions when the decoy account logs in (v2).",
+    )
+    login.add_argument("--storage-dir", required=True)
+    login.add_argument("--marker-phrase", default="my-settings")
+    login.add_argument("--expected-user", required=True, help="The decoy account whose logon triggers the actions")
     return parser
 
 
 def _load_config(storage_dir: str, marker_phrase: str) -> tuple[StealthStore, dict | None]:
     store = StealthStore(Path(storage_dir), marker_phrase)
     return store, store.read()
+
+
+def _parse_panic_targets(raw: str) -> list[dict]:
+    targets = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        kind, _, target = entry.partition(":")
+        if kind not in {"partition", "system"}:
+            raise ValueError(f"Unknown panic kind: {kind}")
+        targets.append({"kind": kind, "target": target.strip()})
+    return targets
+
+
+def should_trigger(current_user: str, expected_user: str) -> bool:
+    """True when the logged-in user is the decoy account the logon monitor watches."""
+    return bool(expected_user) and current_user.strip().lower() == expected_user.strip().lower()
+
+
+def _run_configured_duress(storage_dir: str, marker_phrase: str) -> None:
+    """Load the stored config and run its duress actions (logon-monitor mode).
+
+    The encryption passphrase is taken from the DURESS_KEY environment variable;
+    it is never stored on disk. If a configured action needs it and it is missing,
+    that action is skipped and the run reports which actions executed.
+    """
+    store, config = _load_config(storage_dir, marker_phrase)
+    if config is None:
+        raise SystemExit("No config found - run init first.")
+
+    actions = DuressActions(
+        log_file=Path(config["actions"].get("log_file")) if config["actions"].get("log_file") else None,
+        email_to=config["actions"].get("email_to") or None,
+        wipe_dirs=config["actions"].get("wipe_dirs") or [],
+        encrypt_dirs=config["actions"].get("encrypt_dirs") or [],
+        panic_targets=config["actions"].get("panic_targets") or [],
+    )
+    manager = PinManager(config["pin_config"])
+    guard = DuressGuard(
+        manager,
+        actions,
+        encryption_passphrase=os.environ.get("DURESS_KEY"),
+        panic_storage_dir=Path(storage_dir),
+        device_id=f"logon-{os.environ.get('USERNAME', 'unknown')}",
+    )
+    guard._run_duress_actions()
+    print("duress-actions-run")
 
 
 def main() -> None:
@@ -260,6 +342,8 @@ def main() -> None:
             log_file=Path(args.log_file) if args.log_file else None,
             email_to=args.email_to or None,
             wipe_dirs=[d.strip() for d in args.wipe_dirs.split(",") if d.strip()],
+            encrypt_dirs=[d.strip() for d in args.encrypt_dirs.split(",") if d.strip()],
+            panic_targets=_parse_panic_targets(args.panic_targets),
         )
         payload = {
             "version": CONFIG_VERSION,
@@ -268,6 +352,8 @@ def main() -> None:
                 "log_file": str(actions.log_file) if actions.log_file else "",
                 "email_to": actions.email_to or "",
                 "wipe_dirs": actions.wipe_dirs,
+                "encrypt_dirs": actions.encrypt_dirs,
+                "panic_targets": actions.panic_targets,
                 "decoy": actions.decoy,
             },
         }
@@ -281,6 +367,13 @@ def main() -> None:
         manager = PinManager(config["pin_config"])
         result = manager.verify(args.pin)
         print(result)
+    elif args.command == "on-login":
+        import getpass
+
+        if not should_trigger(getpass.getuser(), args.expected_user):
+            print("not-triggered")
+            return
+        _run_configured_duress(args.storage_dir, args.marker_phrase)
 
 
 if __name__ == "__main__":

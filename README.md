@@ -17,8 +17,8 @@ This project takes the honest, layered approach to the same goal:
 1. **A duress-aware unlock layer** (`duress_guard.py`) — a real, testable
    implementation of a duress PIN: the user enters either their real PIN or a duress
    PIN, and the system responds differently depending on which one it was. The duress
-   path can silently alert a contact, drop the user into a decoy profile, or trigger
-   a guarded wipe — whichever the user configures.
+   path can silently alert a contact, drop the user into a decoy profile, encrypt
+   sensitive folders, or arm a pre-boot partition wipe — whichever the user configures.
 2. **Drive encryption with recoverable keys** (`bitlocker_tool.py`) — enables
    BitLocker (the *actual* defense against bootable-media attacks like Hiren's
    BootCD), exports the recovery key, and stores it where the user chooses: a local
@@ -26,6 +26,25 @@ This project takes the honest, layered approach to the same goal:
    etc.).
 3. **Stealth storage** — configuration and keys live in a user-selected directory,
    not a well-known path, with a marker file so the *owner* can always find it.
+
+## v2 additions
+
+- **Encrypt-on-duress instead of wipe** (`duress_encryption.py`). On a duress PIN,
+  configured folders are encrypted in place with a key derived from a passphrase only
+  the owner holds. To a coercer the files look like a ransomware hit; the owner
+  decrypts later and loses nothing. Real Fernet crypto (AES-128-CBC + HMAC), not a toy.
+- **Configurable targets.** The user picks what the duress PIN protects: a **folder**
+  (encrypted immediately, machine on), a **partition**, or the **whole system** (panic
+  marker processed at next boot by a pre-boot component — you can't wipe the running
+  OS from inside it). Machine keeps working afterward, so nothing looks wrong.
+- **Controlled simulation** (`simulate_duress.py`). Runs the whole scenario in a
+  throwaway sandbox: normal unlock, duress unlock, files become unreadable garbage,
+  owner decrypts byte-identical, wrong passphrase rejected, panic markers armed/cancelled.
+  18 checks, all passing.
+- **Logon monitor** (`on-login` mode + `register_logon_task.ps1`). Duress through the
+  *official* login screen using two accounts: the decoy account's password IS the
+  duress password, and a scheduled task runs the duress actions when that account logs
+  in. No custom login screen needed. See `docs/LOGON_MONITOR.md`.
 
 ## What this is NOT (read this first)
 
@@ -42,16 +61,24 @@ This project takes the honest, layered approach to the same goal:
 
 ```text
 .
-|-- duress_guard.py          # PIN management, verify, lockout, duress actions
+|-- duress_guard.py          # PIN management, verify, lockout, duress actions + on-login mode
+|-- duress_encryption.py     # v2: encrypt-on-duress (Fernet, owner-held key)
+|-- panic_boot.py            # v2: pre-boot panic markers for partition/system targets
 |-- bitlocker_tool.py        # BitLocker status/enable + recovery-key backup
+|-- simulate_duress.py       # v2: controlled simulation of the whole flow
+|-- register_logon_task.ps1  # v2: register the logon-monitor scheduled task
 |-- requirements.txt
 |-- README.md
 |-- PAPER.md                 # design, threat model, honest limitations
 |-- docs/
-|   `-- CREDENTIAL_PROVIDER.md
+|   |-- CREDENTIAL_PROVIDER.md
+|   `-- LOGON_MONITOR.md
 |-- tests/
 |   |-- test_duress.py
-|   `-- test_bitlocker.py
+|   |-- test_bitlocker.py
+|   |-- test_encryption.py
+|   |-- test_panic_boot.py
+|   `-- test_login_monitor.py
 ```
 
 ## Quick start
@@ -59,9 +86,12 @@ This project takes the honest, layered approach to the same goal:
 ```powershell
 python -m pip install -r requirements.txt
 python -m pytest            # run the test suite (no admin needed)
+python simulate_duress.py   # controlled simulation of the v2 flow
 
 # Duress layer: configure a real PIN + duress PIN
 python duress_guard.py --init --storage-dir "D:\MyStuff\.config" --pin 4821 --duress-pin 9991
+python duress_guard.py --init --storage-dir "D:\MyStuff\.config" --pin 4821 --duress-pin 9991 `
+    --encrypt-dirs "D:\MyStuff\secrets" --panic-targets "partition:E:,system:C:"
 
 # BitLocker tool: check status, enable, back up the recovery key
 python bitlocker_tool.py --status

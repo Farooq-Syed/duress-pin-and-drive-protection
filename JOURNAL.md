@@ -33,3 +33,30 @@ bootable-media cracking is an encryption problem.
 lockout), duress actions (silent log, email, guarded wipe, decoy flag), stealth
 storage, BitLocker status/enable/recovery-key backup (local / email / print). The
 credential-provider path is documented in docs/CREDENTIAL_PROVIDER.md as a C++ follow-up.
+
+## v2: encrypt instead of wipe, panic targets, logon monitor
+
+Three big changes, driven by a threat-model discussion:
+
+- **Encrypt-on-duress.** Wipe destroys the owner's data too. v2 encrypts the
+  sensitive folders in place with a key from a passphrase only the owner holds. To a
+  coercer it looks exactly like a ransomware hit; the owner recovers everything.
+  Real Fernet, not a toy. A unit test caught a real design flaw here: decrypt had to
+  know which files were actually encrypted, so I added a manifest. Good bug to catch.
+- **Configurable targets + pre-boot panic.** A folder can be encrypted immediately;
+  a partition or the whole system cannot be wiped from inside the running OS, so the
+  duress PIN arms a panic marker processed at next boot by a pre-boot component. The
+  machine keeps working after a duress login, which is the "nothing looks wrong"
+  property the user wanted. The wiper is triple-guarded and tested as a dry run.
+- **Logon monitor.** The user's instinct was right: don't build a custom login screen,
+  use the official one. A normal program can't read login-screen input (secure
+  desktop), but two accounts achieve the same effect: the decoy account's password IS
+  the duress password, and a scheduled task fires the actions on its logon. Documented
+  honestly, including that the "one account, two passwords" version needs the C++
+  credential provider.
+
+The threat-model correction that mattered most: the drive-pulled-out + Hiren's
+scenario is NOT a duress-PIN problem (the PIN never runs), it is a BitLocker problem,
+and the design now says so explicitly.
+
+State: 37 tests green, simulation 18/18.

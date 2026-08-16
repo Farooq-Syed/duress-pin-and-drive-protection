@@ -1,2 +1,4 @@
-# Duress-Guard uses only the Python standard library
-# (hashlib, hmac, smtplib, subprocess). No installs required.
+# Duress-Guard core uses only the Python standard library.
+# The v2 encrypt-on-duress feature adds the `cryptography` package for real,
+# vetted encryption (Fernet = AES-128-CBC + HMAC-SHA256).
+cryptography>=42.0
